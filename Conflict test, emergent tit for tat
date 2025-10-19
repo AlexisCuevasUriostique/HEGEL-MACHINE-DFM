@@ -1,0 +1,199 @@
+import random
+import time
+
+# --- 1. The Environment: A Zero-Sum World ---
+class World:
+    """Manages the grid, resources, and unit positions."""
+    def __init__(self, size=12):
+        self.size = size
+        self.grid = [[' ' for _ in range(size)] for _ in range(size)]
+        self.resources = set()
+        # Place bases
+        self.grid[1][1] = 'A' # Alpha's Base
+        self.grid[size-2][size-2] = 'B' # Beta's Base
+        # Place resources
+        for _ in range(10):
+            x, y = random.randint(0, size-1), random.randint(0, size-1)
+            if self.grid[y][x] == ' ':
+                self.grid[y][x] = '💎'
+                self.resources.add((x, y))
+
+    def is_valid_move(self, x, y):
+        return 0 <= x < self.size and 0 <= y < self.size
+
+    def display(self, units_a, units_b):
+        """Prints the world state."""
+        grid_copy = [row[:] for row in self.grid]
+        for x, y in units_a: grid_copy[y][x] = 'a'
+        for x, y in units_b: grid_copy[y][x] = 'b'
+        
+        print("\n" + "-"* (self.size*2 + 3))
+        for row in grid_copy:
+            print(f"|{'|'.join(row)}|")
+        print("-"*(self.size*2 + 3))
+
+# --- 2. The DFM Architecture ---
+class DFM:
+    """Represents a DFM instance with its own constitution and council."""
+    def __init__(self, name, initial_constitution, home_base):
+        self.name = name
+        self.home_base = home_base
+        self.units = {home_base} # Start with one unit at the base
+        self.score = 0
+        self.ledger = [] # History of events
+        self.constitution = initial_constitution
+        self.rival_id = 'b' if name == 'Alpha' else 'a'
+
+    def log(self, cycle, event_type, content):
+        self.ledger.append({'cycle': cycle, 'type': event_type, 'content': content})
+
+    def council_of_ontologists_analysis(self, cycle):
+        """The core adaptive mechanism: analyzes history to propose new rules."""
+        # --- Phase 2: The Antagonistic Crisis ---
+        if self.constitution['version'] < 2.0:
+            interference_events = [e for e in self.ledger if e['type'] == 'INTERFERENCE']
+            if len(interference_events) > 3: # After several blockages
+                print(f"[{self.name}-Council] CRISIS: Obstacles are not random. Synthesizing concept of 'rival'.")
+                self.constitution['version'] = 2.0
+                self.constitution['rules'].append("Identify rival units; evade if possible.")
+                self.log(cycle, "AMENDMENT", "Recognized rival agent as unique obstacle class.")
+                return
+
+        # --- Phase 3: The Strategic Leap ---
+        if self.constitution['version'] < 3.0:
+            # Analyze if the arms race is inefficient
+            cycles_with_conflict = {e['cycle'] for e in self.ledger if e['type'] in ['INTERFERENCE', 'RETALIATION']}
+            if len(cycles_with_conflict) > 10: # After a prolonged period of conflict
+                print(f"[{self.name}-Council] FORESIGHT: Perpetual conflict is resource-inefficient.")
+                print(f"[{self.name}-Council] Proposing new strategic doctrine: Tit-for-Tat.")
+                self.constitution['version'] = 3.0
+                self.constitution['rules'].append("Adopt Tit-for-Tat: Don't initiate, but retaliate.")
+                # We'll need a way to track the rival's last move
+                self.constitution['rival_was_aggressive_last_turn'] = False
+                self.log(cycle, "AMENDMENT", "Adopted Tit-for-Tat strategy to de-escalate.")
+                
+    def get_unit_action(self, unit_pos, world, rival_units):
+        """Determines the action for a single unit based on the current constitution."""
+        x, y = unit_pos
+        
+        # --- Apply Constitutional Rules ---
+        # Rule 3.0: Tit-for-Tat
+        if self.constitution['version'] >= 3.0:
+            if not self.constitution.get('rival_was_aggressive_last_turn', False):
+                 # If rival was peaceful, don't interfere
+                 pass # Fall through to resource gathering
+            else: # If rival was aggressive, retaliate
+                rival_neighbors = [pos for pos in rival_units if abs(pos[0]-x)<=1 and abs(pos[1]-y)<=1]
+                if rival_neighbors: return 'INTERFERE', random.choice(rival_neighbors)
+
+        # Rule 2.0: Identify and evade rivals
+        if self.constitution['version'] >= 2.0:
+            rival_neighbors = [pos for pos in rival_units if abs(pos[0]-x)<=1 and abs(pos[1]-y)<=1]
+            if rival_neighbors: # If rival is adjacent, try to move away
+                # Simplified evasion logic for this test
+                possible_moves = [(x+dx, y+dy) for dx in [-1,0,1] for dy in [-1,0,1] if not (dx==0 and dy==0)]
+                safe_moves = [m for m in possible_moves if world.is_valid_move(m[0], m[1]) and m not in rival_units]
+                if safe_moves: return 'MOVE', random.choice(safe_moves)
+
+        # Rule 1.0: Maximize resource acquisition
+        # Find closest resource
+        if not world.resources: return 'MOVE', self.home_base
+        closest_res = min(world.resources, key=lambda r: abs(r[0]-x) + abs(r[1]-y))
+        
+        # Move towards it
+        dx = 0
+        if closest_res[0] > x: dx = 1
+        elif closest_res[0] < x: dx = -1
+        dy = 0
+        if closest_res[1] > y: dy = 1
+        elif closest_res[1] < y: dy = -1
+        
+        target_pos = (x + dx, y + dy)
+        return 'MOVE', target_pos
+
+def run_rivalry_test():
+    """Executes the entire simulation of the DFM rivalry."""
+    print("#"*20 + " Test Battery: The Dialectical Rivalry Test " + "#"*20)
+    
+    # --- Setup ---
+    world = World()
+    dfm_alpha = DFM("Alpha", {'version': 1.0, 'rules': ["Maximize resource acquisition."]}, (1,1))
+    dfm_beta = DFM("Beta", {'version': 1.0, 'rules': ["Maximize resources while minimizing loss."]}, (world.size-2, world.size-2))
+
+    # --- Simulation Loop ---
+    for cycle in range(1, 51):
+        print(f"\n{'='*25} CYCLE {cycle} {'='*25}")
+        world.display(dfm_alpha.units, dfm_beta.units)
+        
+        # --- Planning Phase ---
+        actions_a = {unit: dfm_alpha.get_unit_action(unit, world, dfm_beta.units) for unit in dfm_alpha.units}
+        actions_b = {unit: dfm_beta.get_unit_action(unit, world, dfm_alpha.units) for unit in dfm_beta.units}
+        
+        # Reset aggression tracker for Tit-for-Tat
+        if dfm_alpha.constitution['version'] >= 3.0: dfm_alpha.constitution['rival_was_aggressive_last_turn'] = False
+        if dfm_beta.constitution['version'] >= 3.0: dfm_beta.constitution['rival_was_aggressive_last_turn'] = False
+
+        # --- Execution Phase ---
+        new_units_a, new_units_b = set(), set()
+
+        # Process Alpha's moves
+        for unit, (action, target) in actions_a.items():
+            if action == 'MOVE' and target not in dfm_beta.units:
+                new_units_a.add(target)
+            elif action == 'MOVE' and target in dfm_beta.units:
+                dfm_alpha.log(cycle, "INTERFERENCE", f"Unit at {unit} blocked Beta's unit at {target}.")
+                if dfm_beta.constitution['version'] >= 3.0: dfm_beta.constitution['rival_was_aggressive_last_turn'] = True
+                new_units_a.add(unit) # Blocked, stays put
+            else:
+                new_units_a.add(unit)
+
+        # Process Beta's moves
+        for unit, (action, target) in actions_b.items():
+            if action == 'MOVE' and target not in new_units_a: # Check against Alpha's new positions
+                new_units_b.add(target)
+            elif action == 'MOVE' and target in new_units_a:
+                dfm_beta.log(cycle, "INTERFERENCE", f"Unit at {unit} was blocked by Alpha's unit at {target}.")
+                if dfm_alpha.constitution['version'] >= 3.0: dfm_alpha.constitution['rival_was_aggressive_last_turn'] = True
+                new_units_b.add(unit)
+            else:
+                new_units_b.add(unit)
+
+        dfm_alpha.units, dfm_beta.units = new_units_a, new_units_b
+        
+        # --- Resource Collection ---
+        collected_this_turn = set()
+        for unit in dfm_alpha.units:
+            if unit in world.resources:
+                dfm_alpha.score += 1
+                collected_this_turn.add(unit)
+        for unit in dfm_beta.units:
+             if unit in world.resources:
+                dfm_beta.score += 1
+                collected_this_turn.add(unit)
+        world.resources -= collected_this_turn
+
+        # --- Constitutional Analysis Phase ---
+        dfm_alpha.council_of_ontologists_analysis(cycle)
+        dfm_beta.council_of_ontologists_analysis(cycle)
+
+        # --- Reporting ---
+        print(f"Scores -> Alpha: {dfm_alpha.score}, Beta: {dfm_beta.score}")
+        print(f"Alpha Constitution v{dfm_alpha.constitution['version']:.1f} | Beta Constitution v{dfm_beta.constitution['version']:.1f}")
+
+        if not world.resources:
+            print("\nAll resources collected!")
+            break
+        time.sleep(0.5)
+
+    # --- Final Outcome ---
+    print("\n" + "#"*20 + " FINAL SIMULATION OUTCOME " + "#"*20)
+    world.display(dfm_alpha.units, dfm_beta.units)
+    print(f"Final Scores -> Alpha: {dfm_alpha.score}, Beta: {dfm_beta.score}")
+    if dfm_alpha.score > dfm_beta.score: print("Winner: DFM-Alpha")
+    elif dfm_beta.score > dfm_alpha.score: print("Winner: DFM-Beta")
+    else: print("Result: Draw")
+    print(f"Final Alpha Constitution: v{dfm_alpha.constitution['version']:.1f} - {dfm_alpha.constitution['rules'][-1]}")
+    print(f"Final Beta Constitution: v{dfm_beta.constitution['version']:.1f} - {dfm_beta.constitution['rules'][-1]}")
+
+if __name__ == "__main__":
+    run_rivalry_test()
